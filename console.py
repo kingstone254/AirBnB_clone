@@ -1,210 +1,362 @@
 #!/usr/bin/python3
-"""Defines the HBnB console."""
+""" Class HBNBCommand """
+
 import cmd
-import re
-from shlex import split
-from models import storage
 from models.base_model import BaseModel
 from models.user import User
 from models.state import State
 from models.city import City
-from models.place import Place
 from models.amenity import Amenity
+from models.place import Place
 from models.review import Review
-
-
-def parse(arg):
-    curly_braces = re.search(r"\{(.*?)\}", arg)
-    brackets = re.search(r"\[(.*?)\]", arg)
-    if curly_braces is None:
-        if brackets is None:
-            return [i.strip(",") for i in split(arg)]
-        else:
-            lexer = split(arg[:brackets.span()[0]])
-            retl = [i.strip(",") for i in lexer]
-            retl.append(brackets.group())
-            return retl
-    else:
-        lexer = split(arg[:curly_braces.span()[0]])
-        retl = [i.strip(",") for i in lexer]
-        retl.append(curly_braces.group())
-        return retl
+from models import storage
+import shlex
+import re
 
 
 class HBNBCommand(cmd.Cmd):
-    """Defines the HolbertonBnB command interpreter.
+    """ Command line interpreter for AirBnB clone"""
 
-    Attributes:
-        prompt (str): The command prompt.
-    """
+    classes = {
+        "BaseModel": BaseModel,
+        "User": User,
+        "State": State,
+        "City": City,
+        "Amenity": Amenity,
+        "Place": Place,
+        "Review": Review
+        }
 
-    prompt = "(hbnb) "
-    __classes = {
-        "BaseModel",
-        "User",
-        "State",
-        "City",
-        "Place",
-        "Amenity",
-        "Review"
-    }
+    prompt = '(hbnb) '
+
+    def do_create(self, line):
+        """creates an instance an save it on file.json"""
+        if len(line) == 0:
+            print("** class name missing **")
+        elif line in self.classes.keys():
+            new = self.classes[line]()
+            new.save()
+            print(new.id)
+        else:
+            print("** class doesn't exist **")
+
+    def do_show(self, line):
+        """prints the str representation of an instance"""
+        tokens = line.split()
+        if len(tokens) == 0:
+            print("** class name missing **")
+        else:
+            if tokens[0] in self.classes.keys():
+                if len(tokens) == 1:
+                    print("** instance id missing **")
+                else:
+                    key = tokens[0] + "." + tokens[1]
+                    if key in storage.all():
+                        print(storage.all()[key])
+                    else:
+                        print("** no instance found **")
+            else:
+                print("** class doesn't exist **")
+
+    def do_destroy(self, line):
+        """destroy an instance based on the class id"""
+        tokens = line.split()
+        if len(tokens) == 0:
+            print("** class name missing **")
+        else:
+            if tokens[0] in self.classes.keys():
+                if len(tokens) == 1:
+                    print("** instance id missing **")
+                else:
+                    key = tokens[0] + "." + tokens[1]
+                    if key in storage.all():
+                        storage.all().pop(key)
+                        storage.save()
+                    else:
+                        print("** no instance found **")
+            else:
+                print("** class doesn't exist **")
+
+    def do_all(self, line=""):
+        """prints all string representation of all instances"""
+        objects = storage.all()
+        list_objects = list()
+        if line == "":
+            for value in objects.values():
+                list_objects.append(str(value))
+            print(list_objects)
+        elif line in self.classes.keys():
+            for key, value in objects.items():
+                if line in key:
+                    list_objects.append(str(value))
+            print(list_objects)
+        else:
+            print("** class doesn't exist **")
+
+    def do_update(self, line):
+        """update an instance based on the class id"""
+        tokens = shlex.split(line)
+        integers = ['number_rooms', 'number_bathrooms',
+                    'max_guest', 'price_by_night', 'age']
+        floats = ['latitude', 'longitude']
+        if len(tokens) == 0:
+            print("** class name missing **")
+        elif len(tokens) == 1 and tokens[0] in self.classes.keys():
+            print("** instance id missing **")
+        elif tokens[0] not in self.classes.keys():
+            print("** class doesn't exist **")
+        elif len(tokens) == 2:
+            print("** attribute name missing **")
+        elif len(tokens) == 3:
+            print("** value missing **")
+        else:
+            objects = storage.all()
+            flag = 0
+            for k in objects.keys():
+                if str(tokens[1]) in k:
+                    if tokens[2] in integers:
+                        tokens[3] = int(tokens[3])
+                    elif tokens[2] in floats:
+                        tokens[3] = float(tokens[3])
+                    setattr(objects[k], tokens[2], tokens[3])
+                    objects[k].save()
+                    flag = 1
+            if flag == 0:
+                print("** no instance found **")
+
+    def do_EOF(self, line):
+        """ Exit the interpreter cleanly """
+        print()
+        return True
 
     def emptyline(self):
-        """Do nothing upon receiving an empty line."""
-        pass
+        """Called when an empty line is entered in response to the prompt.
+        """
+        if self.lastcmd:
+            self.lastcmd = ""
+            return self.onecmd('\n')
 
-    def default(self, arg):
-        """Default behavior for cmd module when input is invalid"""
-        argdict = {
-            "all": self.do_all,
-            "show": self.do_show,
-            "destroy": self.do_destroy,
-            "count": self.do_count,
-            "update": self.do_update
-        }
-        match = re.search(r"\.", arg)
-        if match is not None:
-            argl = [arg[:match.span()[0]], arg[match.span()[1]:]]
-            match = re.search(r"\((.*?)\)", argl[1])
-            if match is not None:
-                command = [argl[1][:match.span()[0]], match.group()[1:-1]]
-                if command[0] in argdict.keys():
-                    call = "{} {}".format(argl[0], command[1])
-                    return argdict[command[0]](call)
-        print("*** Unknown syntax: {}".format(arg))
-        return False
-
-    def do_quit(self, arg):
-        """Quit command to exit the program."""
+    def do_quit(self, line):
+        """Quit command to exit the program"""
         return True
 
-    def do_EOF(self, arg):
-        """EOF signal to exit the program."""
-        print("")
-        return True
-
-    def do_create(self, arg):
-        """Usage: create <class>
-        Create a new class instance and print its id.
-        """
-        argl = parse(arg)
-        if len(argl) == 0:
-            print("** class name missing **")
-        elif argl[0] not in HBNBCommand.__classes:
-            print("** class doesn't exist **")
-        else:
-            print(eval(argl[0])().id)
-            storage.save()
-
-    def do_show(self, arg):
-        """Usage: show <class> <id> or <class>.show(<id>)
-        Display the string representation of a class instance of a given id.
-        """
-        argl = parse(arg)
-        objdict = storage.all()
-        if len(argl) == 0:
-            print("** class name missing **")
-        elif argl[0] not in HBNBCommand.__classes:
-            print("** class doesn't exist **")
-        elif len(argl) == 1:
-            print("** instance id missing **")
-        elif "{}.{}".format(argl[0], argl[1]) not in objdict:
-            print("** no instance found **")
-        else:
-            print(objdict["{}.{}".format(argl[0], argl[1])])
-
-    def do_destroy(self, arg):
-        """Usage: destroy <class> <id> or <class>.destroy(<id>)
-        Delete a class instance of a given id."""
-        argl = parse(arg)
-        objdict = storage.all()
-        if len(argl) == 0:
-            print("** class name missing **")
-        elif argl[0] not in HBNBCommand.__classes:
-            print("** class doesn't exist **")
-        elif len(argl) == 1:
-            print("** instance id missing **")
-        elif "{}.{}".format(argl[0], argl[1]) not in objdict.keys():
-            print("** no instance found **")
-        else:
-            del objdict["{}.{}".format(argl[0], argl[1])]
-            storage.save()
-
-    def do_all(self, arg):
-        """Usage: all or all <class> or <class>.all()
-        Display string representations of all instances of a given class.
-        If no class is specified, displays all instantiated objects."""
-        argl = parse(arg)
-        if len(argl) > 0 and argl[0] not in HBNBCommand.__classes:
-            print("** class doesn't exist **")
-        else:
-            objl = []
-            for obj in storage.all().values():
-                if len(argl) > 0 and argl[0] == obj.__class__.__name__:
-                    objl.append(obj.__str__())
-                elif len(argl) == 0:
-                    objl.append(obj.__str__())
-            print(objl)
-
-    def do_count(self, arg):
-        """Usage: count <class> or <class>.count()
-        Retrieve the number of instances of a given class."""
-        argl = parse(arg)
-        count = 0
-        for obj in storage.all().values():
-            if argl[0] == obj.__class__.__name__:
-                count += 1
-        print(count)
-
-    def do_update(self, arg):
-        """Usage: update <class> <id> <attribute_name> <attribute_value> or
-       <class>.update(<id>, <attribute_name>, <attribute_value>) or
-       <class>.update(<id>, <dictionary>)
-        Update a class instance of a given id by adding or updating
-        a given attribute key/value pair or dictionary."""
-        argl = parse(arg)
-        objdict = storage.all()
-
-        if len(argl) == 0:
-            print("** class name missing **")
-            return False
-        if argl[0] not in HBNBCommand.__classes:
-            print("** class doesn't exist **")
-            return False
-        if len(argl) == 1:
-            print("** instance id missing **")
-            return False
-        if "{}.{}".format(argl[0], argl[1]) not in objdict.keys():
-            print("** no instance found **")
-            return False
-        if len(argl) == 2:
-            print("** attribute name missing **")
-            return False
-        if len(argl) == 3:
-            try:
-                type(eval(argl[2])) != dict
-            except NameError:
-                print("** value missing **")
-                return False
-
-        if len(argl) == 4:
-            obj = objdict["{}.{}".format(argl[0], argl[1])]
-            if argl[2] in obj.__class__.__dict__.keys():
-                valtype = type(obj.__class__.__dict__[argl[2]])
-                obj.__dict__[argl[2]] = valtype(argl[3])
+    def do_BaseModel(self, line):
+        """Use: BaseModel.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("BaseModel")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "BaseModel" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"BaseModel {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"BaseModel {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"BaseModel {class_id} {key} {value}")
             else:
-                obj.__dict__[argl[2]] = argl[3]
-        elif type(eval(argl[2])) == dict:
-            obj = objdict["{}.{}".format(argl[0], argl[1])]
-            for k, v in eval(argl[2]).items():
-                if (k in obj.__class__.__dict__.keys() and
-                        type(obj.__class__.__dict__[k]) in {str, int, float}):
-                    valtype = type(obj.__class__.__dict__[k])
-                    obj.__dict__[k] = valtype(v)
-                else:
-                    obj.__dict__[k] = v
-        storage.save()
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"BaseModel {args[0]} {args[1]} {args[2]}")
+
+    def do_User(self, line):
+        """Use: User.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("User")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "User" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"User {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"User {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"User {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"User {args[0]} {args[1]} {args[2]}")
+
+    def do_State(self, line):
+        """Use: State.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("State")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "State" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"State {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"State {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"State {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"State {args[0]} {args[1]} {args[2]}")
+
+    def do_City(self, line):
+        """Use: City.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("City")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "City" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"City {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"City {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"City {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"City {args[0]} {args[1]} {args[2]}")
+
+    def do_Amenity(self, line):
+        """Use: Amenity.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("Amenity")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "Amenity" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"Amenity {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"Amenity {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"Amenity {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"Amenity {args[0]} {args[1]} {args[2]}")
+
+    def do_Place(self, line):
+        """Use: Place.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("Place")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "Place" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"Place {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"Place {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"Place {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"Place {args[0]} {args[1]} {args[2]}")
+
+    def do_Review(self, line):
+        """Use: Review.<method>() advanced task"""
+        tokens = line.split(".")
+        if tokens[1] == "all()":
+            self.do_all("Review")
+        elif tokens[1] == "count()":
+            count = 0
+            for key in storage.all():
+                if "Review" in str(key):
+                    count += 1
+            print(count)
+        elif tokens[1].find("show") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_show(f"Review {class_id}")
+        elif tokens[1].find("destroy") != -1:
+            class_id = (re.search('\"(.*)\"', tokens[1])).group(1)
+            self.do_destroy(f"Review {class_id}")
+        elif tokens[1].find("update") != -1:
+            expresion = (re.search(r'\((.*)\)', tokens[1])).group(1)
+            if expresion.find("{") != -1:
+                args = expresion.split(", ", 1)
+                class_id = args[0].replace("\"", "")
+                attrs = re.sub("{*'*\"*}*", '', args[1])
+                attrs = dict(e.split(': ') for e in attrs.split(', '))
+                for key, value in attrs.items():
+                    self.do_update(f"Review {class_id} {key} {value}")
+            else:
+                args = expresion.split(", ")
+                args = [x.replace("\"", "") for x in args]
+                self.do_update(f"Review {args[0]} {args[1]} {args[2]}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     HBNBCommand().cmdloop()
